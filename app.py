@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -9,9 +10,15 @@ from dotenv import load_dotenv
 from src.data.validator import validate_dataset
 from src.data.cleaner import clean_dataset
 from src.ml.trainer import train_and_compare
-from src.ml.explainability import global_permutation_importance, explain_row
+from src.ml.explainability import (
+    global_permutation_importance,
+    explain_row,
+)
 from src.ml.feature_selection import drop_identifier_columns
-from src.reports.risk_report import build_risk_report, flagged_cases
+from src.reports.risk_report import (
+    build_risk_report,
+    flagged_cases,
+)
 from src.utils.export import dataframe_to_csv_bytes
 from src.agent.context import set_context
 from src.analysis.eda import (
@@ -20,7 +27,15 @@ from src.analysis.eda import (
     recommend_visualizations,
 )
 
+# ---------------------------------------------------------
+# ENVIRONMENT
+# ---------------------------------------------------------
+
 load_dotenv()
+
+# ---------------------------------------------------------
+# PAGE CONFIGURATION
+# ---------------------------------------------------------
 
 st.set_page_config(
     page_title="Agentic AI Risk Analyst",
@@ -29,16 +44,18 @@ st.set_page_config(
 )
 
 st.title("🛡️ Agentic AI Fraud / Churn Risk Analyst")
+
 st.caption(
     "Deterministic machine learning for scoring and explainability, "
     "with an optional tool-calling AI investigation layer."
 )
 
-# -------------------------
-# Sidebar
-# -------------------------
+# ---------------------------------------------------------
+# SIDEBAR
+# ---------------------------------------------------------
 
 with st.sidebar:
+
     st.header("Dataset")
 
     uploaded = st.file_uploader(
@@ -58,29 +75,34 @@ with st.sidebar:
         "They should not be treated as proof of fraud or misconduct."
     )
 
-# -------------------------
-# Load dataset
-# -------------------------
+# ---------------------------------------------------------
+# LOAD DATASET
+# ---------------------------------------------------------
 
 if uploaded is not None:
+
     raw_df = pd.read_csv(uploaded)
 
 elif use_sample:
-    raw_df = pd.read_csv("sample_data/risk_customers.csv")
+
+    raw_df = pd.read_csv(
+        "sample_data/risk_customers.csv"
+    )
 
 else:
+
     st.info("Upload a CSV to begin.")
     st.stop()
 
-# -------------------------
-# 1. Dataset inspection
-# -------------------------
+# ---------------------------------------------------------
+# 1. DATASET INSPECTION
+# ---------------------------------------------------------
 
 st.subheader("1. Dataset inspection")
 
 st.dataframe(
     raw_df.head(20),
-    use_container_width=True,
+    width="stretch",
 )
 
 default_target = (
@@ -119,20 +141,27 @@ c3.metric(
 
 c4.metric(
     "Missing cells",
-    sum(validation.get("missing_values", {}).values()),
+    sum(
+        validation
+        .get("missing_values", {})
+        .values()
+    ),
 )
 
 with st.expander(
     "Validation details",
-    expanded=True,
+    expanded=False,
 ):
+
     st.json(validation)
 
-# -------------------------
-# 2. EDA
-# -------------------------
+# ---------------------------------------------------------
+# 2. EXPLORATORY DATA ANALYSIS
+# ---------------------------------------------------------
 
-st.subheader("2. Exploratory data analysis")
+st.subheader(
+    "2. Exploratory data analysis"
+)
 
 tab1, tab2 = st.tabs(
     [
@@ -146,11 +175,14 @@ with tab1:
     ns = numerical_summary(raw_df)
 
     if not ns.empty:
+
         st.dataframe(
             ns,
-            use_container_width=True,
+            width="stretch",
         )
+
     else:
+
         st.info(
             "No numerical columns."
         )
@@ -160,11 +192,14 @@ with tab2:
     cs = categorical_summary(raw_df)
 
     if not cs.empty:
+
         st.dataframe(
             cs,
-            use_container_width=True,
+            width="stretch",
         )
+
     else:
+
         st.info(
             "No categorical columns."
         )
@@ -173,21 +208,32 @@ st.markdown(
     "#### Recommended visualisations"
 )
 
-recommendations = recommend_visualizations(
-    raw_df,
-    target,
+recommendations = (
+    recommend_visualizations(
+        raw_df,
+        target,
+    )
 )
 
-for rec in recommendations:
+if recommendations:
 
-    st.write(
-        f"**{rec['type']} — {rec['column']}**: "
-        f"{rec['reason']}"
+    for rec in recommendations:
+
+        st.write(
+            f"**{rec['type']} — "
+            f"{rec['column']}**: "
+            f"{rec['reason']}"
+        )
+
+else:
+
+    st.info(
+        "No visualisation recommendations available."
     )
 
-# -------------------------
-# 3. Cleaning
-# -------------------------
+# ---------------------------------------------------------
+# 3. CLEANING
+# ---------------------------------------------------------
 
 st.subheader("3. Cleaning")
 
@@ -224,7 +270,9 @@ st.success(
 
 st.download_button(
     "Download cleaned dataset",
-    dataframe_to_csv_bytes(clean_df),
+    dataframe_to_csv_bytes(
+        clean_df
+    ),
     file_name="cleaned_risk_dataset.csv",
     mime="text/csv",
 )
@@ -232,15 +280,15 @@ st.download_button(
 if target not in clean_df.columns:
 
     st.error(
-        "The target was removed during cleaning "
-        "because it was constant."
+        "The selected target was removed "
+        "during cleaning because it was constant."
     )
 
     st.stop()
 
-# -------------------------
-# 4. Target balance
-# -------------------------
+# ---------------------------------------------------------
+# 4. TARGET BALANCE
+# ---------------------------------------------------------
 
 st.subheader("4. Target balance")
 
@@ -256,14 +304,16 @@ counts.columns = [
     "count",
 ]
 
+target_chart = px.bar(
+    counts,
+    x="class",
+    y="count",
+    title="Target class distribution",
+)
+
 st.plotly_chart(
-    px.bar(
-        counts,
-        x="class",
-        y="count",
-        title="Target class distribution",
-    ),
-    use_container_width=True,
+    target_chart,
+    width="stretch",
 )
 
 strategy = st.radio(
@@ -288,14 +338,14 @@ threshold = st.slider(
     step=0.05,
 )
 
-# -------------------------
-# Train models
-# -------------------------
+# ---------------------------------------------------------
+# TRAIN MODELS
+# ---------------------------------------------------------
 
 if st.button(
     "Train & compare models",
     type="primary",
-    use_container_width=True,
+    width="stretch",
 ):
 
     try:
@@ -304,13 +354,17 @@ if st.button(
             "Training models..."
         ):
 
+            training_result = (
+                train_and_compare(
+                    clean_df,
+                    target,
+                    imbalance_strategy=strategy,
+                )
+            )
+
             st.session_state[
                 "training_result"
-            ] = train_and_compare(
-                clean_df,
-                target,
-                imbalance_strategy=strategy,
-            )
+            ] = training_result
 
     except Exception as exc:
 
@@ -320,184 +374,281 @@ result = st.session_state.get(
     "training_result"
 )
 
-# -------------------------
-# Results
-# -------------------------
+# ---------------------------------------------------------
+# RESULTS
+# ---------------------------------------------------------
 
 if result is not None:
 
-    # -------------------------
-    # 5. Leaderboard
-    # -------------------------
+    # -----------------------------------------------------
+    # 5. MODEL LEADERBOARD
+    # -----------------------------------------------------
 
     st.subheader(
         "5. Model leaderboard"
     )
 
     st.success(
-        f"Selected best model: "
+        "Selected best model: "
         f"{result.best_model_name}"
     )
 
-    excluded_ids = getattr(result, "excluded_identifier_columns", [])
-
-if excluded_ids:
-    st.info(
-        "Automatically excluded identifier columns from ML training: "
-        + ", ".join(excluded_ids)
+    excluded_ids = getattr(
+        result,
+        "excluded_identifier_columns",
+        [],
     )
 
+    if excluded_ids:
 
-    st.dataframe(
-        result.leaderboard,
-        use_container_width=True,
+        st.info(
+            "Automatically excluded "
+            "identifier columns from ML training: "
+            + ", ".join(excluded_ids)
+        )
+
+    # IMPORTANT:
+    # This is intentionally OUTSIDE
+    # the if excluded_ids block.
+
+    leaderboard = getattr(
+        result,
+        "leaderboard",
+        None,
     )
 
-    st.download_button(
-        "Download model leaderboard",
-        dataframe_to_csv_bytes(
-            result.leaderboard
-        ),
-        file_name="model_leaderboard.csv",
-        mime="text/csv",
-    )
+    if (
+        leaderboard is not None
+        and not leaderboard.empty
+    ):
 
-    # -------------------------
-    # Confusion matrix
-    # -------------------------
+        st.dataframe(
+            leaderboard,
+            width="stretch",
+        )
 
-    cm = pd.DataFrame(
-        result.confusion_matrix,
-        index=[
-            "Actual 0",
-            "Actual 1",
-        ],
-        columns=[
-            "Predicted 0",
-            "Predicted 1",
-        ],
-    )
+        st.download_button(
+            "Download model leaderboard",
+            dataframe_to_csv_bytes(
+                leaderboard
+            ),
+            file_name="model_leaderboard.csv",
+            mime="text/csv",
+        )
+
+    else:
+
+        st.warning(
+            "Model leaderboard is unavailable."
+        )
+
+    # -----------------------------------------------------
+    # CONFUSION MATRIX
+    # -----------------------------------------------------
 
     st.markdown(
         "#### Confusion matrix"
     )
 
-    st.dataframe(
-        cm,
-        use_container_width=True,
+    confusion = getattr(
+        result,
+        "confusion_matrix",
+        None,
     )
 
-    # -------------------------
-    # ROC and PR curves
-    # -------------------------
+    if confusion is not None:
+
+        cm = pd.DataFrame(
+            confusion,
+            index=[
+                "Actual 0",
+                "Actual 1",
+            ],
+            columns=[
+                "Predicted 0",
+                "Predicted 1",
+            ],
+        )
+
+        st.dataframe(
+            cm,
+            width="stretch",
+        )
+
+    else:
+
+        st.info(
+            "Confusion matrix unavailable."
+        )
+
+    # -----------------------------------------------------
+    # ROC AND PRECISION-RECALL CURVES
+    # -----------------------------------------------------
+
+    roc_data = getattr(
+        result,
+        "roc_data",
+        None,
+    )
+
+    pr_data = getattr(
+        result,
+        "pr_data",
+        None,
+    )
 
     curve1, curve2 = st.columns(2)
 
     with curve1:
 
-        st.plotly_chart(
-            px.line(
-                result.roc_data,
+        if (
+            roc_data is not None
+            and not roc_data.empty
+        ):
+
+            roc_chart = px.line(
+                roc_data,
                 x="false_positive_rate",
                 y="true_positive_rate",
-                title="ROC curve",
-            ),
-            use_container_width=True,
-        )
+                title="ROC Curve",
+            )
+
+            st.plotly_chart(
+                roc_chart,
+                width="stretch",
+            )
+
+        else:
+
+            st.info(
+                "ROC curve unavailable."
+            )
 
     with curve2:
 
-        st.plotly_chart(
-            px.line(
-                result.pr_data,
+        if (
+            pr_data is not None
+            and not pr_data.empty
+        ):
+
+            pr_chart = px.line(
+                pr_data,
                 x="recall",
                 y="precision",
-                title="Precision–Recall curve",
-            ),
-            use_container_width=True,
-        )
+                title="Precision–Recall Curve",
+            )
 
-    # -------------------------
-    # 6. Risk scoring
-    # -------------------------
+            st.plotly_chart(
+                pr_chart,
+                width="stretch",
+            )
+
+        else:
+
+            st.info(
+                "Precision–Recall curve unavailable."
+            )
+
+    # -----------------------------------------------------
+    # 6. RISK SCORING
+    # -----------------------------------------------------
 
     st.subheader(
         "6. Risk scoring"
     )
 
-    report = build_risk_report(
-        clean_df,
-        result.best_model,
-        target=target,
-        threshold=threshold,
-    )
+    try:
 
-    flagged = flagged_cases(
-        report
-    )
-
-    m1, m2, m3 = st.columns(3)
-
-    m1.metric(
-        "Flagged cases",
-        len(flagged),
-    )
-
-    m2.metric(
-        "Flag rate",
-        f"{len(flagged) / max(len(report), 1):.1%}",
-    )
-
-    m3.metric(
-        "Highest score",
-        f"{report['risk_probability'].max():.1%}",
-    )
-
-    st.dataframe(
-        report[
-            [
-                "row_id",
-                "risk_probability",
-                "risk_band",
-                "risk_flag",
-            ]
-        ].head(100),
-        use_container_width=True,
-    )
-
-    d1, d2 = st.columns(2)
-
-    with d1:
-
-        st.download_button(
-            "Download full risk report",
-            dataframe_to_csv_bytes(
-                report
-            ),
-            file_name="risk_report.csv",
-            mime="text/csv",
-            use_container_width=True,
+        report = build_risk_report(
+            clean_df,
+            result.best_model,
+            target=target,
+            threshold=threshold,
         )
 
-    with d2:
-
-        st.download_button(
-            "Download flagged cases",
-            dataframe_to_csv_bytes(
-                flagged
-            ),
-            file_name="flagged_cases.csv",
-            mime="text/csv",
-            use_container_width=True,
+        flagged = flagged_cases(
+            report
         )
 
-    # -------------------------
-    # 7. Global explainability
-    # -------------------------
+        m1, m2, m3 = st.columns(3)
+
+        m1.metric(
+            "Flagged cases",
+            len(flagged),
+        )
+
+        m2.metric(
+            "Flag rate",
+            (
+                f"{len(flagged) / max(len(report), 1):.1%}"
+            ),
+        )
+
+        m3.metric(
+            "Highest score",
+            (
+                f"{report['risk_probability'].max():.1%}"
+            ),
+        )
+
+        display_columns = [
+            "row_id",
+            "risk_probability",
+            "risk_band",
+            "risk_flag",
+        ]
+
+        st.dataframe(
+            report[
+                display_columns
+            ].head(100),
+            width="stretch",
+        )
+
+        d1, d2 = st.columns(2)
+
+        with d1:
+
+            st.download_button(
+                "Download full risk report",
+                dataframe_to_csv_bytes(
+                    report
+                ),
+                file_name="risk_report.csv",
+                mime="text/csv",
+                width="stretch",
+            )
+
+        with d2:
+
+            st.download_button(
+                "Download flagged cases",
+                dataframe_to_csv_bytes(
+                    flagged
+                ),
+                file_name="flagged_cases.csv",
+                mime="text/csv",
+                width="stretch",
+            )
+
+    except Exception as exc:
+
+        report = None
+        flagged = None
+
+        st.error(
+            f"Risk scoring failed: {exc}"
+        )
+
+    # -----------------------------------------------------
+    # 7. GLOBAL MODEL EXPLAINABILITY
+    # -----------------------------------------------------
 
     st.subheader(
         "7. Global model explainability"
     )
+
+    importance = None
 
     try:
 
@@ -510,128 +661,136 @@ if excluded_ids:
             )
         )
 
-        st.dataframe(
-            importance.head(15),
-            use_container_width=True,
-        )
+        if not importance.empty:
 
-        chart_df = (
-            importance
-            .head(15)
-            .sort_values(
-                "importance_mean"
+            st.dataframe(
+                importance.head(15),
+                width="stretch",
             )
-        )
 
-        st.plotly_chart(
-            px.bar(
+            chart_df = (
+                importance
+                .head(15)
+                .sort_values(
+                    "importance_mean"
+                )
+            )
+
+            importance_chart = px.bar(
                 chart_df,
                 x="importance_mean",
                 y="feature",
                 orientation="h",
                 title=(
-                    "Permutation feature "
-                    "importance"
+                    "Permutation Feature "
+                    "Importance"
                 ),
-            ),
-            use_container_width=True,
-        )
+            )
+
+            st.plotly_chart(
+                importance_chart,
+                width="stretch",
+            )
 
     except Exception as exc:
-
-        importance = None
 
         st.warning(
             "Could not compute permutation "
             f"importance: {exc}"
         )
 
-    # -------------------------
-    # 8. Local explanation
-    # -------------------------
+    # -----------------------------------------------------
+    # 8. INDIVIDUAL CASE EXPLANATION
+    # -----------------------------------------------------
 
     st.subheader(
         "8. Why was this case flagged?"
     )
 
-    case_ids = (
-        report["row_id"]
-        .astype(str)
-        .head(200)
-        .tolist()
-    )
+    if report is not None:
 
-    selected_id = st.selectbox(
-        "Select row_id",
-        case_ids,
-    )
-
-    try:
-
-        source_idx = int(
-            selected_id
+        case_ids = (
+            report["row_id"]
+            .astype(str)
+            .head(200)
+            .tolist()
         )
 
-        X_full = clean_df.drop(
-            columns=[target]
+        selected_id = st.selectbox(
+            "Select row_id",
+            case_ids,
         )
 
-        X_full, _ = (
-            drop_identifier_columns(
-                X_full
+        try:
+
+            source_idx = int(
+                selected_id
             )
+
+            X_full = clean_df.drop(
+                columns=[target]
+            )
+
+            X_full, _ = (
+                drop_identifier_columns(
+                    X_full
+                )
+            )
+
+            if source_idx in X_full.index:
+
+                local = explain_row(
+                    result.best_model,
+                    X_full,
+                    X_full.loc[
+                        source_idx
+                    ],
+                )
+
+                probability = float(
+                    report.loc[
+                        report[
+                            "row_id"
+                        ].astype(str)
+                        == selected_id,
+                        "risk_probability",
+                    ].iloc[0]
+                )
+
+                st.metric(
+                    "Risk probability",
+                    f"{probability:.1%}",
+                )
+
+                st.dataframe(
+                    local,
+                    width="stretch",
+                )
+
+        except Exception as exc:
+
+            st.warning(
+                "Local explanation "
+                f"unavailable: {exc}"
+            )
+
+    # -----------------------------------------------------
+    # SET AGENT CONTEXT
+    # -----------------------------------------------------
+
+    if report is not None:
+
+        set_context(
+            training_result=result,
+            risk_report=report,
+            feature_importance=importance,
+            dataset=clean_df,
+            target=target,
         )
 
-        if source_idx in X_full.index:
-
-            local = explain_row(
-                result.best_model,
-                X_full,
-                X_full.loc[source_idx],
-            )
-
-            probability = float(
-                report.loc[
-                    report[
-                        "row_id"
-                    ].astype(str)
-                    == selected_id,
-                    "risk_probability",
-                ].iloc[0]
-            )
-
-            st.metric(
-                "Risk probability",
-                f"{probability:.1%}",
-            )
-
-            st.dataframe(
-                local,
-                use_container_width=True,
-            )
-
-    except Exception as exc:
-
-        st.warning(
-            "Local explanation "
-            f"unavailable: {exc}"
-        )
-
-    # -------------------------
-    # Agent context
-    # -------------------------
-
-    set_context(
-        training_result=result,
-        risk_report=report,
-        feature_importance=importance,
-        dataset=clean_df,
-        target=target,
-    )
-
-    # -------------------------
-    # 9. Agent
-    # -------------------------
+    # -----------------------------------------------------
+    # 9. AGENTIC AI
+    # -----------------------------------------------------
 
     st.subheader(
         "9. Agentic AI investigation"
@@ -645,8 +804,7 @@ if excluded_ids:
             "Ask the risk analyst",
             placeholder=(
                 "Why is row 12 high risk? "
-                "What are the strongest "
-                "risk factors?"
+                "What are the strongest risk factors?"
             ),
         )
 
@@ -668,11 +826,11 @@ if excluded_ids:
                     "analysis tools..."
                 ):
 
-                    st.write(
-                        ask_agent(
-                            question
-                        )
+                    answer = ask_agent(
+                        question
                     )
+
+                st.write(answer)
 
             except Exception as exc:
 
